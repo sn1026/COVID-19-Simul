@@ -64,11 +64,30 @@ while Curr_Time <= Simul_Time
         
         %% Collision Checks
         for j = 1:1:Boston_Density
-            if j ~= i                   %Make sure node isn't checking itself.
-                %%DO SOMETHING
+            if j ~= i                       %Checking to see which people collided.
+                % Collision Calculations! [COMPUTE LATER]
+                %% Transmission Checks
+                if Infect(i) || Infect(j)   %Check if either person is infected.
+                    
+                    if Dead(i) || Dead(j) || Recover(i) || Recover(j)   %Case 1: Collided with dead or recovered person. Do nothing.
+                        if Dead(i) || Recover(i)
+                            Infect(i) = 0;                              %Person i should not be infected.
+                        else
+                            Infect(j) = 0;                              %Person j should not be infected.
+                        end
+                    
+                    else                                                %Case 2: Collided with infected or healthy person.
+                        spread = rand(1) < Infection_Rate;              %Roll a number to see if COVID spread.
+                        if spread                                       %COVID gets spread:
+                            Susceptible(i) = 0;             
+                            Infect(i) = 1;                              %Update state of person i to infected.
+                            Susceptible(j) = 0;             
+                            Infect(j) = 1;                              %Update state of person j to infected.
+                        end   
+                    end
+                end
             end
         end
-    end
     
     Curr_Time = Curr_Time + dT;     %%The simulation progresses forward.
 end
