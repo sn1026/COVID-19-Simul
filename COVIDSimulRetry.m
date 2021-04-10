@@ -5,30 +5,28 @@ clc;
 %% Global Variables
 
 %Time Specific
-Simul_Time = 30;                            %Total duration (in days) of the simulation.
-dT    = 0.02083;                            %How fast time will accelerate for the simulation. Currently set to 30min.
-Curr_Time   = 0;                            %Keep track of how much time has progressed in the simulation.
+Simul_Time = 30;                        %Total duration (in days) of the simulation.
+dT    = 0.02083;                        %How fast time will accelerate for the simulation. Currently set to 30min.
+Curr_Time   = 0;                        %Keep track of how much time has progressed in the simulation.
 
 %Map Specific
-Map_Bound      = 5280;                      %Size of the Map.  In our case, its 5280 feet because we're doing 1 mi^2.
-Boston_Density = 13936;                     %Population Density of Boston/sq. mi.
-SD_Prop        = 0.5;                       %Percentage of the Population opting for social distancing.
+Map_Bound      = 5280;                  %Size of the Map.  In our case, its 5280 feet because we're doing 1 mi^2
+Boston_Density = 13936;                 %Population Density of Boston/sq. mi
+SD_Prop        = 0.5;                   %Percentage of the Population opting for social distancing
 
 %COVID Specific
-Initial_Infect = 0.05;                      %Percentage of population infected with COVID at the start of simulation.
-Infect_Rate    = 0.75;                      %Likelihood of infection upon contact.
-Mortality_Rate = 0.018;                     %Likelihood of death if infected.
-Avg_Recovery_Time  = 15;                    %Average time (in days) to recover from COVID.
-Recovery_Time = ceil(Avg_Recovery_Time...   %The actual time a person will take to recover from COVID.
-           + 5 * randn(Boston_Density,1));
-                                        
-                    
+Initial_Infect = 0.05;                  %Percentage of population infected with COVID at the start of simulation
+Infect_Rate    = 0.75;                  %Likelihood of infection upon contact.
+Mortality_Rate = 0.018;                 %Likelihood of death if infected.
+Avg_Recovery_Time  = 15;                %Average time (in days) to recover from COVID.
+Recovery_Time = ceil(Avg_Recovery_Time + 5*randn(Boston_Density,1));
+                                        %^^ The actual time a person will take to recover from COVID. 
+
 
 %Population Specific
-Infect      = zeros(Boston_Density,1);                  %Create a vector to keep track of infected.
 Infect      = rand(Boston_Density,1) < Initial_Infect;  %Initially random people with COVID.
 Susceptible = ~Infect;                                  %Everyone else that has not contracted COVID is susceptible.   
-Recover     = zeros(Boston_Density,1);                  %Create a vector to keep track of recovered.
+Recover     = zeros(Boston_Density,1);                  %Create a vector to keep track of recovered
 Dead        = zeros(Boston_Density,1);                  %Create a vector to keep track of deceased.
 Dead_Chance = rand(Boston_Density,1) < Mortality_Rate;  %Infected random people with COVID have a chance of dying.
 
@@ -37,13 +35,21 @@ Speed           = 20;                                   %How fast (in ft/dT) eac
 Social_Distance = rand(Boston_Density,1) < SD_Prop;     %Identifies which people will be socially distancing.
 Position        = rand(Boston_Density,2) * Map_Bound;   %Where each 'person' will spawn in on the map.
 Direction       = rand(Boston_Density,2) * 2 * pi;      %Direction each 'person' will be moving.
-Move_Speed      = [Speed * cos(Direction),              %How fast each 'person' is moving, given a direction.
+Move_Speed      = [Speed * cos(Direction),...              %How fast each 'person' is moving, given a direction.
                    Speed * sin(Direction)];
 Collision       = zeros(Boston_Density, Boston_Density); %Create an array to keep track of people bumping into each other.
-          
 
 %% Computation
 while Curr_Time <= Simul_Time
+    %% Collision Checks
+    % Decrement collision delay
+    Collision = Collision-ones(Boston_Density, Boston_Density);
+    Collision(Collision < 0)=0;
+    
+    % Update carrier position
+    Position_new = Position+Move_Speed.*(~repmat(Social_Distance,1,2)).*dT;
+    
+    %%
     for i = 1:1:Boston_Density
         %% Infected Individual Checks
         if Infect(i)                            %Checking if the infected individual recovered or died.
@@ -67,29 +73,39 @@ while Curr_Time <= Simul_Time
         for j = 1:1:Boston_Density
             if j ~= i                       %Checking to see which people collided.
                 % Collision Calculations! [COMPUTE LATER]
-                %% Transmission Checks
-                if Infect(i) || Infect(j)   %Check if either person is infected.
-                    %[NOT SURE IF DEAD/RECOVER CHECK IS NECESSARY - CHECK]
-                    if Dead(i) || Dead(j) || Recover(i) || Recover(j)   %Case 1: Collided with dead or recovered person. Do nothing.
-                        if Dead(i) || Recover(i)
+                % Get positions of carriers j and k
+                Position_1 = Position_new(i,:);
+                Position_2 = Position_new(j,:);
+                
+                
+                % If collision between two living specimens, re-calcuate
+                % direction and transmit virus (but don't check the same
+                % two carriers twice)
+                if norm(Position_1-Position_2)<=(2*rad) && ~Collision(i,j) && ~Collision(j,i)
+                   
+                    %% Transmission Checks
+                    if Infect(i) || Infect(j)   %Check if either person is infected.
+                        if Dead(i) || Recover(i)                        %Case 1: Person i is dead or recovered.
                             Infect(i) = 0;                              %Person i should not be infected.
-                        else
+                            
+                        elseif Dead(j) || Recover(j)                    %Case 2: Person j is dead or recovered.
                             Infect(j) = 0;                              %Person j should not be infected.
+                            
+                        else                                            %Case 3: Collided with infected or susceptible person.
+                            spread = rand(1) < Infect_Rate;             %Roll a number to see if COVID spread.
+                            if spread                                   %COVID gets spread:
+                                Susceptible(i) = 0;             
+                                Infect(i) = 1;                          %Update state of person i to infected.
+                                Susceptible(j) = 0;             
+                                Infect(j) = 1;                          %Update state of person j to infected.
+                            end   
                         end
-                    
-                    else                                                %Case 2: Collided with infected or susceptible person.
-                        spread = rand(1) < Infect_Rate;                 %Roll a number to see if COVID spread.
-                        if spread                                       %COVID gets spread:
-                            Susceptible(i) = 0;             
-                            Infect(i) = 1;                              %Update state of person i to infected.
-                            Susceptible(j) = 0;             
-                            Infect(j) = 1;                              %Update state of person j to infected.
-                        end   
                     end
                 end
             end
         end
     end
+    
     Curr_Time = Curr_Time + dT;     %%The simulation progresses forward.
 end
 
