@@ -1,5 +1,5 @@
 %%Clean the interface
-clear;
+clear all;
 clc;
 
 %% Global Variables
@@ -24,6 +24,7 @@ Recovery_Time = ceil(Avg_Recovery_Time + 5*randn(Boston_Density,1));
 
 
 %Population Specific
+Infect      = zeros(Boston_Density,1);                  %Create a vector to keep track of infected
 Infect      = rand(Boston_Density,1) < Initial_Infect;  %Initially random people with COVID.
 Susceptible = ~Infect;                                  %Everyone else that has not contracted COVID is susceptible.   
 Recover     = zeros(Boston_Density,1);                  %Create a vector to keep track of recovered
@@ -38,13 +39,14 @@ Direction       = rand(Boston_Density,2) * 2 * pi;      %Direction each 'person'
 Move_Speed      = [Speed * cos(Direction),...              %How fast each 'person' is moving, given a direction.
                    Speed * sin(Direction)];
 Collision       = zeros(Boston_Density, Boston_Density); %Create an array to keep track of people bumping into each other.
+n_delay         = ceil(1/(dT));                        % Collision delay
 
 %% Computation
 while Curr_Time <= Simul_Time
     %% Collision Checks
     % Decrement collision delay
     Collision = Collision-ones(Boston_Density, Boston_Density);
-    Collision(Collision < 0)=0;
+    Collision(Collision<0)=0;
     
     % Update carrier position
     Position_new = Position+Move_Speed.*(~repmat(Social_Distance,1,2)).*dT;
@@ -82,29 +84,89 @@ while Curr_Time <= Simul_Time
                 % direction and transmit virus (but don't check the same
                 % two carriers twice)
                 if norm(Position_1-Position_2)<=(2*rad) && ~Collision(i,j) && ~Collision(j,i)
+                    
+                    % Create collision delay (i.e. if carrier j and k have
+                    % recently collided, don't recompute collisions for a
+                    % n_delay time steps in case they're still close in proximity,
+                    % otherwise they might just keep orbiting eachother)
+                    Collision(i,j) = n_delay;
+                    Collision(j,i) = n_delay;
+                    
+                    % Compute New Velocities
+                    velocities_new = atan2((Position_2(2)-Position_1(2)),(Position_2(1)-Position_1(1)));
+                    
+                    % if one carrier is isolated, treat it like a wall and
+                    % bounce the other carrier off it
+                    if Social_Distance(j)||Dead(j)
+                     
+                        % Get normal direction vector of 'virtual wall'
+                        Virtual_wall = -velocities_new+pi/2;
+                        New_wall = [sin(Virtual_wall) cos(Virtual_wall)];
+                        dot = v(i,:)*New_wall';
+                        
+                        % Redirect non-isolated carrier
+                        v(i,1) = v(i,1)-2*dot*New_wall(1);
+                        v(i,2) = v(i,2)-2*dot*New_wall(2);
+                        v(j,1) = 0;
+                        v(j,2) = 0;
+                        
+                    elseif Social_Distance(k)||Dead(k)
+                        
+                        % Get normal direction vector of 'virtual wall'
+                        Virtual_wall = -velocities_new+pi/2;
+                        New_wall = [sin(Virtual_wall) cos(Virtual_wall)];
+                        dot = v(j,:)*New_wall';
+                        
+                        % Redirect non-isolated carrier
+                        v(j,1) = v(j,1)-2*dot*New_wall(1);
+                        v(j,2) = v(j,2)-2*dot*New_wall(2);
+                        v(i,1) = 0;
+                        v(i,2) = 0;
+                        
+                        % Otherwise, transfer momentum between carriers
+                    else
+                        
+                        % Get velocity magnitudes
+                        Velocity_mag_1 = sqrt(v(i,1)^2+v(i,2)^2);
+                        Velocity_mag_2 = sqrt(v(j,1)^2+v(j,2)^2);
+                        
+                        % Get directions
+                        th1 = atan2(v(i,2),v(i,1));
+                        th2 = atan2(v(j,2),v(j,1));
+                        
+                        % Compute new velocities
+                        v(i,1) = Velocity_mag_2*cos(th2-phi)*cos(phi)+Velocity_mag_1*sin(th1-phi)*cos(phi+pi/2);
+                        v(i,2) = Velocity_mag_2*cos(th2-phi)*sin(phi)+Velocity_mag_1*sin(th1-phi)*sin(phi+pi/2);
+                        v(j,1) = Velocity_mag_1*cos(th1-phi)*cos(phi)+Velocity_mag_2*sin(th2-phi)*cos(phi+pi/2);
+                        v(j,2) = Velocity_mag_1*cos(th1-phi)*sin(phi)+Velocity_mag_2*sin(th2-phi)*sin(phi+pi/2);
+                        
+                    end
+                    
                    
                     %% Transmission Checks
                     if Infect(i) || Infect(j)   %Check if either person is infected.
-                        if Dead(i) || Recover(i)                        %Case 1: Person i is dead or recovered.
-                            Infect(i) = 0;                              %Person i should not be infected.
-                            
-                        elseif Dead(j) || Recover(j)                    %Case 2: Person j is dead or recovered.
-                            Infect(j) = 0;                              %Person j should not be infected.
-                            
-                        else                                            %Case 3: Collided with infected or susceptible person.
-                            spread = rand(1) < Infect_Rate;             %Roll a number to see if COVID spread.
-                            if spread                                   %COVID gets spread:
+
+                        if Dead(i) || Dead(j) || Recover(i) || Recover(j)   %Case 1: Collided with dead or recovered person. Do nothing.
+                            if Dead(i) || Recover(i)
+                                Infect(i) = 0;                              %Person i should not be infected.
+                            else
+                                Infect(j) = 0;                              %Person j should not be infected.
+                            end
+
+                        else                                                %Case 2: Collided with infected or susceptible person.
+                            spread = rand(1) < Infect_Rate;                 %Roll a number to see if COVID spread.
+                            if spread                                       %COVID gets spread:
                                 Susceptible(i) = 0;             
-                                Infect(i) = 1;                          %Update state of person i to infected.
+                                Infect(i) = 1;                              %Update state of person i to infected.
                                 Susceptible(j) = 0;             
-                                Infect(j) = 1;                          %Update state of person j to infected.
+                                Infect(j) = 1;                              %Update state of person j to infected.
                             end   
                         end
                     end
                 end
             end
         end
-    end
+     end
     
     Curr_Time = Curr_Time + dT;     %%The simulation progresses forward.
 end
