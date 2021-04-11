@@ -45,35 +45,31 @@ n_delay         = ceil(1/(dT));                        % Collision delay
 %% Computation
 while Curr_Time <= Simul_Time
     %% Infected Individual Checks
-    if Infect(i)                            %Checking if the infected individual recovered or died.
+    for i = 1:1:Boston_Density
+        if Infect(i)                            %Checking if the infected individual recovered or died.
 
-        if Recovery_Time <= 0
-            if Dead_Chance(i)               %Case 1: They're dead.
-                Dead(i)   = 1;              %Set their state to dead.
-                Infect(i) = 0;              %They're no longer infected.
-                Move_Speed(i,:) = [0 0];    %The dead are no longer mobile.
+            if Recovery_Time <= 0
+                if Dead_Chance(i)               %Case 1: They're dead.
+                    Dead(i)   = 1;              %Set their state to dead.
+                    Infect(i) = 0;              %They're no longer infected.
+                    Move_Speed(i,:) = [0 0];    %The dead are no longer mobile.
 
-            else                            %Case 2: They're recovered.
-                Recover(i) = 1;             %Set their state to recovered.
-                Infect(i)  = 0;             %They're no longer infected.
+                else                            %Case 2: They're recovered.
+                    Recover(i) = 1;             %Set their state to recovered.
+                    Infect(i)  = 0;             %They're no longer infected.
+                end
             end
-        end
 
-        Recovery_Time(i) = Recovery_Time(i) - 1;      %Decrement their remaining recovery time for the next check.
-    end
+            Recovery_Time(i) = Recovery_Time(i) - 1;      %Decrement their remaining recovery time for the next check.
+        end
         
-        %% Collision Checks
-        % Decrement collision delay
+        %% Collision Variables
         Collision = Collision-ones(Boston_Density, Boston_Density);
         Collision(Collision<0)=0;
-    
-        % Update carrier position
         Position_new = Position + Move_Speed * (~repmat(Social_Distance,1,2)) * dT;
-    
-    for i = 1:1:Boston_Density
+        
         for j = 1:1:Boston_Density
             if j ~= i                       %Checking to see which people collided.
-                % Collision Calculations! [COMPUTE LATER]
                 % Get positions of carriers j and i
                 Position_1 = Position_new(i,:);
                 Position_2 = Position_new(j,:);
@@ -92,14 +88,14 @@ while Curr_Time <= Simul_Time
                     Collision(j,i) = n_delay;
                     
                     % Compute New Velocities
-                    velocities_new = atan2((Position_2(2)-Position_1(2)),(Position_2(1)-Position_1(1)));
+                    New_Move_Speed = atan2((Position_2(2)-Position_1(2)),(Position_2(1)-Position_1(1)));
                     
                     % if one carrier is isolated, treat it like a wall and
                     % bounce the other carrier off it
                     if Social_Distance(j)||Dead(j)
                      
                         % Get normal direction vector of 'virtual wall'
-                        Virtual_wall = -velocities_new+pi/2;
+                        Virtual_wall = -New_Move_Speed+pi/2;
                         New_wall = [sin(Virtual_wall) cos(Virtual_wall)];
                         dot = Move_Speed(i,:)*New_wall';
                         
@@ -112,7 +108,7 @@ while Curr_Time <= Simul_Time
                     elseif Social_Distance(i)||Dead(i)
                         
                         % Get normal direction vector of 'virtual wall'
-                        Virtual_wall = -velocities_new+pi/2;
+                        Virtual_wall = -New_Move_Speed+pi/2;
                         New_wall = [sin(Virtual_wall) cos(Virtual_wall)];
                         dot = Move_Speed(j,:)*New_wall';
                         
@@ -134,10 +130,10 @@ while Curr_Time <= Simul_Time
                         th2 = atan2(Move_Speed(j,2),Move_Speed(j,1));
                         
                         % Compute new velocities
-                        Move_Speed(i,1) = Velocity_mag_2*cos(th2-velocities_new)*cos(velocities_new)+Velocity_mag_1*sin(th1-velocities_new)*cos(velocities_new+pi/2);
-                        Move_Speed(i,2) = Velocity_mag_2*cos(th2-velocities_new)*sin(velocities_new)+Velocity_mag_1*sin(th1-velocities_new)*sin(velocities_new+pi/2);
-                        Move_Speed(j,1) = Velocity_mag_1*cos(th1-velocities_new)*cos(velocities_new)+Velocity_mag_2*sin(th2-velocities_new)*cos(velocities_new+pi/2);
-                        Move_Speed(j,2) = Velocity_mag_1*cos(th1-velocities_new)*sin(velocities_new)+Velocity_mag_2*sin(th2-velocities_new)*sin(velocities_new+pi/2);
+                        Move_Speed(i,1) = Velocity_mag_2*cos(th2-New_Move_Speed)*cos(New_Move_Speed)+Velocity_mag_1*sin(th1-New_Move_Speed)*cos(New_Move_Speed+pi/2);
+                        Move_Speed(i,2) = Velocity_mag_2*cos(th2-New_Move_Speed)*sin(New_Move_Speed)+Velocity_mag_1*sin(th1-New_Move_Speed)*sin(New_Move_Speed+pi/2);
+                        Move_Speed(j,1) = Velocity_mag_1*cos(th1-New_Move_Speed)*cos(New_Move_Speed)+Velocity_mag_2*sin(th2-New_Move_Speed)*cos(New_Move_Speed+pi/2);
+                        Move_Speed(j,2) = Velocity_mag_1*cos(th1-New_Move_Speed)*sin(New_Move_Speed)+Velocity_mag_2*sin(th2-New_Move_Speed)*sin(New_Move_Speed+pi/2);
                         
                     end                     
 
