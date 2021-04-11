@@ -1,5 +1,5 @@
 %%Clean the interface
-clear all;
+clear;
 clc;
 
 %% Global Variables
@@ -15,17 +15,16 @@ Boston_Density = 13936;                 %Population Density of Boston/sq. mi
 SD_Prop        = 0.5;                   %Percentage of the Population opting for social distancing
 
 %COVID Specific
-Initial_Infect = 0.05;                  %Percentage of population infected with COVID at the start of simulation
-Infect_Rate    = 0.75;                  %Likelihood of infection upon contact.
-Infect_radius  = 6;                      % Infection radius =  6 feet
-Mortality_Rate = 0.018;                 %Likelihood of death if infected.
-Avg_Recovery_Time  = 15;                %Average time (in days) to recover from COVID.
-Recovery_Time = ceil(Avg_Recovery_Time + 5*randn(Boston_Density,1));
-                                        %^^ The actual time a person will take to recover from COVID. 
+Initial_Infect = 0.05;                      %Percentage of population infected with COVID at the start of simulation
+Infect_Rate    = 0.75;                      %Likelihood of infection upon contact.
+Infect_radius  = 6;                         % Infection radius =  6 feet
+Mortality_Rate = 0.018;                     %Likelihood of death if infected.
+Avg_Recovery_Time  = 15;                    %Average time (in days) to recover from COVID.
+Recovery_Time = ceil(Avg_Recovery_Time ...  %The actual time a person will take to recover from COVID.
+                + 5*randn(Boston_Density,1));                         
 
 
 %Population Specific
-Infect      = zeros(Boston_Density,1);                  %Create a vector to keep track of infected
 Infect      = rand(Boston_Density,1) < Initial_Infect;  %Initially random people with COVID.
 Susceptible = ~Infect;                                  %Everyone else that has not contracted COVID is susceptible.   
 Recover     = zeros(Boston_Density,1);                  %Create a vector to keep track of recovered
@@ -35,44 +34,43 @@ Dead_Chance = rand(Boston_Density,1) < Mortality_Rate;  %Infected random people 
 %Initial Movement Setup
 Speed           = 20;                                   %How fast (in ft/dT) each person is initially moving.  Currently set to 20 feet / 30min.
 Social_Distance = rand(Boston_Density,1) < SD_Prop;     %Identifies which people will be socially distancing.
-Position        = rand(Boston_Density,2).*(Map_Bound);   %Where each 'person' will spawn in on the map.
-Direction       = rand(Boston_Density,1).*2.*pi;      %Direction each 'person' will be moving.
-Move_Speed      = [Speed.*cos(Direction) Speed.*sin(Direction)];              %How fast each 'person' is moving, given a direction.
+Position        = rand(Boston_Density,2) * (Map_Bound); %Where each 'person' will spawn in on the map.
+Direction       = rand(Boston_Density,1) * 2 * pi;      %Direction each 'person' will be moving.
+Move_Speed      = [Speed.*cos(Direction), ...           %How fast each 'person' is moving, given a direction.
+                   Speed.*sin(Direction)];              
                    
 Collision       = zeros(Boston_Density, Boston_Density); %Create an array to keep track of people bumping into each other.
 n_delay         = ceil(1/(dT));                        % Collision delay
 
 %% Computation
 while Curr_Time <= Simul_Time
-    %% Collision Checks
-    % Decrement collision delay
-    Collision = Collision-ones(Boston_Density, Boston_Density);
-    Collision(Collision<0)=0;
-    
-    % Update carrier position
-    Position_new = Position + Move_Speed.*(~repmat(Social_Distance,1,2)).*dT;
-    
-    %%
-    for i = 1:1:Boston_Density
-        %% Infected Individual Checks
-        if Infect(i)                            %Checking if the infected individual recovered or died.
-            
-            if Recovery_Time <= 0
-                if Dead_Chance(i)               %Case 1: They're dead.
-                    Dead(i)   = 1;              %Set their state to dead.
-                    Infect(i) = 0;              %They're no longer infected.
-                    Move_Speed(i,:) = [0 0];    %The dead are no longer mobile.
-             
-                else                            %Case 2: They're recovered.
-                    Recover(i) = 1;             %Set their state to recovered.
-                    Infect(i)  = 0;             %They're no longer infected.
-                end
+    %% Infected Individual Checks
+    if Infect(i)                            %Checking if the infected individual recovered or died.
+
+        if Recovery_Time <= 0
+            if Dead_Chance(i)               %Case 1: They're dead.
+                Dead(i)   = 1;              %Set their state to dead.
+                Infect(i) = 0;              %They're no longer infected.
+                Move_Speed(i,:) = [0 0];    %The dead are no longer mobile.
+
+            else                            %Case 2: They're recovered.
+                Recover(i) = 1;             %Set their state to recovered.
+                Infect(i)  = 0;             %They're no longer infected.
             end
-            
-            Recovery_Time(i) = Recovery_Time(i) - 1;      %Decrement their remaining recovery time for the next check.
         end
+
+        Recovery_Time(i) = Recovery_Time(i) - 1;      %Decrement their remaining recovery time for the next check.
+    end
         
         %% Collision Checks
+        % Decrement collision delay
+        Collision = Collision-ones(Boston_Density, Boston_Density);
+        Collision(Collision<0)=0;
+    
+        % Update carrier position
+        Position_new = Position + Move_Speed * (~repmat(Social_Distance,1,2)) * dT;
+    
+    for i = 1:1:Boston_Density
         for j = 1:1:Boston_Density
             if j ~= i                       %Checking to see which people collided.
                 % Collision Calculations! [COMPUTE LATER]
@@ -141,11 +139,10 @@ while Curr_Time <= Simul_Time
                         Move_Speed(j,1) = Velocity_mag_1*cos(th1-velocities_new)*cos(velocities_new)+Velocity_mag_2*sin(th2-velocities_new)*cos(velocities_new+pi/2);
                         Move_Speed(j,2) = Velocity_mag_1*cos(th1-velocities_new)*sin(velocities_new)+Velocity_mag_2*sin(th2-velocities_new)*sin(velocities_new+pi/2);
                         
-                    end
-%                     
-                   
+                    end                     
+
                     %% Transmission Checks
-                    if Infect(i) || Infect(j)   %Check if either person is infected.
+                    if Infect(i) || Infect(j)                               %Check if either person is infected.
 
                         if Dead(i) || Dead(j) || Recover(i) || Recover(j)   %Case 1: Collided with dead or recovered person. Do nothing.
                             if Dead(i) || Recover(i)
