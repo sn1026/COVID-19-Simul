@@ -66,13 +66,13 @@ while Curr_Time <= Simul_Time
         %% Collision Variables
         Collision = Collision-ones(Boston_Density, Boston_Density);
         Collision(Collision<0)=0;
-        Position_new = Position + Move_Speed * (~repmat(Social_Distance,1,2)) * dT;
+        Position_New = Position + Move_Speed .* (~repmat(Social_Distance,1,2)) * dT;
         
         for j = 1:1:Boston_Density
             if j ~= i                       %Checking to see which people collided.
                 % Get positions of carriers j and i
-                Position_1 = Position_new(i,:);
-                Position_2 = Position_new(j,:);
+                Position_1 = Position_New(i,:);
+                Position_2 = Position_New(j,:);
                 
                 
                 % If collision between two living specimens, re-calcuate
