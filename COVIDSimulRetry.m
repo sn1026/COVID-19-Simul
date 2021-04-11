@@ -17,6 +17,7 @@ SD_Prop        = 0.5;                   %Percentage of the Population opting for
 %COVID Specific
 Initial_Infect = 0.05;                  %Percentage of population infected with COVID at the start of simulation
 Infect_Rate    = 0.75;                  %Likelihood of infection upon contact.
+Infect_radius  = 6;                      % Infection radius =  6 feet
 Mortality_Rate = 0.018;                 %Likelihood of death if infected.
 Avg_Recovery_Time  = 15;                %Average time (in days) to recover from COVID.
 Recovery_Time = ceil(Avg_Recovery_Time + 5*randn(Boston_Density,1));
@@ -34,10 +35,10 @@ Dead_Chance = rand(Boston_Density,1) < Mortality_Rate;  %Infected random people 
 %Initial Movement Setup
 Speed           = 20;                                   %How fast (in ft/dT) each person is initially moving.  Currently set to 20 feet / 30min.
 Social_Distance = rand(Boston_Density,1) < SD_Prop;     %Identifies which people will be socially distancing.
-Position        = rand(Boston_Density,2) * Map_Bound;   %Where each 'person' will spawn in on the map.
-Direction       = rand(Boston_Density,2) * 2 * pi;      %Direction each 'person' will be moving.
-Move_Speed      = [Speed * cos(Direction),...              %How fast each 'person' is moving, given a direction.
-                   Speed * sin(Direction)];
+Position        = rand(Boston_Density,2).*(Map_Bound);   %Where each 'person' will spawn in on the map.
+Direction       = rand(Boston_Density,1).*2.*pi;      %Direction each 'person' will be moving.
+Move_Speed      = [Speed.*cos(Direction) Speed.*sin(Direction)];              %How fast each 'person' is moving, given a direction.
+                   
 Collision       = zeros(Boston_Density, Boston_Density); %Create an array to keep track of people bumping into each other.
 n_delay         = ceil(1/(dT));                        % Collision delay
 
@@ -49,7 +50,7 @@ while Curr_Time <= Simul_Time
     Collision(Collision<0)=0;
     
     % Update carrier position
-    Position_new = Position+Move_Speed.*(~repmat(Social_Distance,1,2)).*dT;
+    Position_new = Position + Move_Speed.*(~repmat(Social_Distance,1,2)).*dT;
     
     %%
     for i = 1:1:Boston_Density
@@ -75,7 +76,7 @@ while Curr_Time <= Simul_Time
         for j = 1:1:Boston_Density
             if j ~= i                       %Checking to see which people collided.
                 % Collision Calculations! [COMPUTE LATER]
-                % Get positions of carriers j and k
+                % Get positions of carriers j and i
                 Position_1 = Position_new(i,:);
                 Position_2 = Position_new(j,:);
                 
@@ -83,7 +84,7 @@ while Curr_Time <= Simul_Time
                 % If collision between two living specimens, re-calcuate
                 % direction and transmit virus (but don't check the same
                 % two carriers twice)
-                if norm(Position_1-Position_2)<=(2*rad) && ~Collision(i,j) && ~Collision(j,i)
+                if norm(Position_1-Position_2)<=(2*Infect_radius) && ~Collision(i,j) && ~Collision(j,i)
                     
                     % Create collision delay (i.e. if carrier j and k have
                     % recently collided, don't recompute collisions for a
@@ -102,46 +103,46 @@ while Curr_Time <= Simul_Time
                         % Get normal direction vector of 'virtual wall'
                         Virtual_wall = -velocities_new+pi/2;
                         New_wall = [sin(Virtual_wall) cos(Virtual_wall)];
-                        dot = v(i,:)*New_wall';
+                        dot = Move_Speed(i,:)*New_wall';
                         
                         % Redirect non-isolated carrier
-                        v(i,1) = v(i,1)-2*dot*New_wall(1);
-                        v(i,2) = v(i,2)-2*dot*New_wall(2);
-                        v(j,1) = 0;
-                        v(j,2) = 0;
+                        Move_Speed(i,1) = Move_Speed(i,1)-2*dot*New_wall(1);
+                        Move_Speed(i,2) = Move_Speed(i,2)-2*dot*New_wall(2);
+                        Move_Speed(j,1) = 0;
+                        Move_Speed(j,2) = 0;
                         
-                    elseif Social_Distance(k)||Dead(k)
+                    elseif Social_Distance(i)||Dead(i)
                         
                         % Get normal direction vector of 'virtual wall'
                         Virtual_wall = -velocities_new+pi/2;
                         New_wall = [sin(Virtual_wall) cos(Virtual_wall)];
-                        dot = v(j,:)*New_wall';
+                        dot = Move_Speed(j,:)*New_wall';
                         
                         % Redirect non-isolated carrier
-                        v(j,1) = v(j,1)-2*dot*New_wall(1);
-                        v(j,2) = v(j,2)-2*dot*New_wall(2);
-                        v(i,1) = 0;
-                        v(i,2) = 0;
+                        Move_Speed(j,1) = Move_Speed(j,1)-2*dot*New_wall(1);
+                        Move_Speed(j,2) = Move_Speed(j,2)-2*dot*New_wall(2);
+                        Move_Speed(i,1) = 0;
+                        Move_Speed(i,2) = 0;
                         
                         % Otherwise, transfer momentum between carriers
                     else
                         
                         % Get velocity magnitudes
-                        Velocity_mag_1 = sqrt(v(i,1)^2+v(i,2)^2);
-                        Velocity_mag_2 = sqrt(v(j,1)^2+v(j,2)^2);
+                        Velocity_mag_1 = sqrt(Move_Speed(i,1)^2+Move_Speed(i,2)^2);
+                        Velocity_mag_2 = sqrt(Move_Speed(j,1)^2+Move_Speed(j,2)^2);
                         
                         % Get directions
-                        th1 = atan2(v(i,2),v(i,1));
-                        th2 = atan2(v(j,2),v(j,1));
+                        th1 = atan2(Move_Speed(i,2),Move_Speed(i,1));
+                        th2 = atan2(Move_Speed(j,2),Move_Speed(j,1));
                         
                         % Compute new velocities
-                        v(i,1) = Velocity_mag_2*cos(th2-phi)*cos(phi)+Velocity_mag_1*sin(th1-phi)*cos(phi+pi/2);
-                        v(i,2) = Velocity_mag_2*cos(th2-phi)*sin(phi)+Velocity_mag_1*sin(th1-phi)*sin(phi+pi/2);
-                        v(j,1) = Velocity_mag_1*cos(th1-phi)*cos(phi)+Velocity_mag_2*sin(th2-phi)*cos(phi+pi/2);
-                        v(j,2) = Velocity_mag_1*cos(th1-phi)*sin(phi)+Velocity_mag_2*sin(th2-phi)*sin(phi+pi/2);
+                        Move_Speed(i,1) = Velocity_mag_2*cos(th2-velocities_new)*cos(velocities_new)+Velocity_mag_1*sin(th1-velocities_new)*cos(velocities_new+pi/2);
+                        Move_Speed(i,2) = Velocity_mag_2*cos(th2-velocities_new)*sin(velocities_new)+Velocity_mag_1*sin(th1-velocities_new)*sin(velocities_new+pi/2);
+                        Move_Speed(j,1) = Velocity_mag_1*cos(th1-velocities_new)*cos(velocities_new)+Velocity_mag_2*sin(th2-velocities_new)*cos(velocities_new+pi/2);
+                        Move_Speed(j,2) = Velocity_mag_1*cos(th1-velocities_new)*sin(velocities_new)+Velocity_mag_2*sin(th2-velocities_new)*sin(velocities_new+pi/2);
                         
                     end
-                    
+%                     
                    
                     %% Transmission Checks
                     if Infect(i) || Infect(j)   %Check if either person is infected.
