@@ -5,8 +5,8 @@ clc;
 %% Global Variables
 
 %Time Specific
-Simul_Time = 30;                                % Total duration (in days) of the simulation.
-dT         = 0.02083;                           % How fast time will accelerate for the simulation. Currently set to 30min.
+Simul_Time = 60;                                % Total duration (in days) of the simulation.
+dT         = 0.02083*3;                           % How fast time will accelerate for the simulation. Currently set to 30min.
 % Curr_Time  = 0;                                 % Keep track of how much time has progressed in the simulation.
 Time = linspace(0,Simul_Time,Simul_Time./dT);              % Time vector
 
@@ -19,10 +19,11 @@ SD_Prop        = 0.5;                           % Percentage of the Population o
 Initial_Infect     = 0.05;                       % Percentage of population infected with COVID at the start of simulation
 Infect_Rate        = 0.75;                       % Likelihood of infection upon contact.
 Infect_radius      = 6;                          % Infection radius =  6 feet
-Mortality_Rate     = 0.018;                      % Likelihood of death if infected.
+Mortality_Rate     = 0.2;                      % Likelihood of death if infected. (.018)
 Avg_Recovery_Time  = 15;                         % Average time (in days) to recover from COVID.
-Recovery_Time      = ceil(Avg_Recovery_Time ...  % The actual time a person will take to recover from COVID.
-                    + 5*randn(Boston_Density,1));                         
+% Recovery_Time      = ceil(Avg_Recovery_Time ...  % The actual time a person will take to recover from COVID.
+%                     + 5*randn(Boston_Density,1));                
+Recovery_Time = ceil(Avg_Recovery_Time.*ones(Boston_Density,1)+4.*randn(Boston_Density,1))./dT; % Time-to-recover vector (randomized about mean)
 
 
 %Population Specific
@@ -47,22 +48,47 @@ n_delay         = ceil(1/(dT));                          % Collision delay
 for a = 1:(Simul_Time/dT)
     %% Infected Individual Checks
     for i = 1:1:Boston_Density
-        if Infect(i)                            % Checking if the infected individual recovered or died.
+%         if Infect(i)                            % Checking if the infected individual recovered or died.
 
-            if Recovery_Time <= 0
-                if Dead_Chance(i)               % Case 1: They're dead.
-                    Dead(i)   = 1;              % Set their state to dead.
-                    Infect(i) = 0;              % They're no longer infected.
-                    Move_Speed(i,:) = [0 0];    % The dead are no longer mobile.
+%             if Recovery_Time <= 0
+%                 if Dead_Chance(i)               % Case 1: They're dead.
+%                     Dead(i)   = 1;              % Set their state to dead.
+%                     Infect(i) = 0;              % They're no longer infected.
+%                     Move_Speed(i,:) = [0 0];    % The dead are no longer mobile.
+% 
+%                 else                            % Case 2: They're recovered.
+%                     Recover(i) = 1;             % Set their state to recovered.
+%                     Infect(i)  = 0;             % They're no longer infected.
+%                 end
+%             end
+% 
+%             Recovery_Time(i) = Recovery_Time(i) - 1;      % Decrement their remaining recovery time for the next check.
+%         end
 
-                else                            % Case 2: They're recovered.
-                    Recover(i) = 1;             % Set their state to recovered.
-                    Infect(i)  = 0;             % They're no longer infected.
-                end
+        if Infect(i) && Recovery_Time(i) <= 0
+            
+            % If recovery time is up and carrier is dead, well, it's dead.
+            % Zero it's velocity
+            if Dead_Chance(i)
+                Susceptible(i)=0;
+                Dead(i) = 1;
+                Move_Speed(i,:) = [0 0];
+                Infect(i) = 0;
+                Recover(i) = 0;
+            else
+                
+                % If recovery time is up and carrier is not dead, recover
+                % that carrier
+                Recover(i)=1;
+                Infect(i)=0;
+                Susceptible(i)=0;
+                Dead(i)=0;
             end
-
-            Recovery_Time(i) = Recovery_Time(i) - 1;      % Decrement their remaining recovery time for the next check.
+            
+        elseif (Infect(i))
+            Recovery_Time(i) = Recovery_Time(i) - 0.5;
         end
+        
         
         %% Collision Variables : Decrement collision delay
         Collision = Collision-ones(Boston_Density, Boston_Density);
