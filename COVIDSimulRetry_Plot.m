@@ -5,25 +5,24 @@ clc;
 %% Global Variables
 
 %Time Specific
-Simul_Time = 60;                                % Total duration (in days) of the simulation.
-dT         = 0.02083*3;                           % How fast time will accelerate for the simulation. Currently set to 30min.
-% Curr_Time  = 0;                                 % Keep track of how much time has progressed in the simulation.
-Time = linspace(0,Simul_Time,Simul_Time./dT);              % Time vector
+Simul_Time = 90;                                    % Total duration (in days) of the simulation.
+dT         = 0.02083*3;                             % How fast time will accelerate for the simulation. Currently set to 30min.
+Time_Interval = Simul_Time/dT;                      % # of times the code will iterate during computation
+Time = linspace(0,Simul_Time,Time_Interval);        % Create a vector to keep track of time.
 
 %Map Specific
 Map_Bound      = 600;                          % Size of the Map.  In our case, its 5280 feet because we're doing 1 mi^2
-Boston_Density = 100;                         % Population Density of Boston/sq. mi
-SD_Prop        = 0.5;                           % Percentage of the Population opting for social distancing
+Boston_Density = 200;                         % Population Density of Boston/sq. mi
+SD_Prop        = 0.4;                           % Percentage of the Population opting for social distancing
 
 %COVID Specific
-Initial_Infect     = 0.05;                       % Percentage of population infected with COVID at the start of simulation
-Infect_Rate        = 0.75;                       % Likelihood of infection upon contact.
+Initial_Infect     = 0.03;                       % Percentage of population infected with COVID at the start of simulation
+Infect_Rate        = 0.66;                       % Likelihood of infection upon contact.
 Infect_radius      = 6;                          % Infection radius =  6 feet
-Mortality_Rate     = 0.2;                      % Likelihood of death if infected. (.018)
+Mortality_Rate     = 0.026;                      % Likelihood of death if infected.
 Avg_Recovery_Time  = 15;                         % Average time (in days) to recover from COVID.
-% Recovery_Time      = ceil(Avg_Recovery_Time ...  % The actual time a person will take to recover from COVID.
-%                     + 5*randn(Boston_Density,1));                
-Recovery_Time = ceil(Avg_Recovery_Time.*ones(Boston_Density,1)+4.*randn(Boston_Density,1))./dT; % Time-to-recover vector (randomized about mean)
+Recovery_Time      = ceil(Avg_Recovery_Time ...  % The actual time a person will take to recover from COVID.
+                     + 5*randn(Boston_Density,1))/dT;                
 
 
 %Population Specific
@@ -42,68 +41,43 @@ Move_Speed      = [Speed.*cos(Direction), ...           % How fast each 'person'
                    Speed.*sin(Direction)];              
                    
 Collision       = zeros(Boston_Density, Boston_Density); % Create an array to keep track of people bumping into each other.
-n_delay         = ceil(1/(dT));                          % Collision delay
+Collision_Delay         = ceil(1/dT);                          % Collision delay
 
 %% Computation
-for a = 1:(Simul_Time/dT)
+for a = 1:Time_Interval
     %% Infected Individual Checks
     for i = 1:1:Boston_Density
-%         if Infect(i)                            % Checking if the infected individual recovered or died.
-
-%             if Recovery_Time <= 0
-%                 if Dead_Chance(i)               % Case 1: They're dead.
-%                     Dead(i)   = 1;              % Set their state to dead.
-%                     Infect(i) = 0;              % They're no longer infected.
-%                     Move_Speed(i,:) = [0 0];    % The dead are no longer mobile.
-% 
-%                 else                            % Case 2: They're recovered.
-%                     Recover(i) = 1;             % Set their state to recovered.
-%                     Infect(i)  = 0;             % They're no longer infected.
-%                 end
-%             end
-% 
-%             Recovery_Time(i) = Recovery_Time(i) - 1;      % Decrement their remaining recovery time for the next check.
-%         end
-
-        if Infect(i) && Recovery_Time(i) <= 0
-            
-            % If recovery time is up and carrier is dead, well, it's dead.
-            % Zero it's velocity
-            if Dead_Chance(i)
-                Susceptible(i)=0;
-                Dead(i) = 1;
-                Move_Speed(i,:) = [0 0];
-                Infect(i) = 0;
-                Recover(i) = 0;
-            else
+        
+        if Infect(i)                            % Checking if the infected individual recovered or died.  
+                                                %Has COVID recovery time elapsed?
+                                                
+            if Recovery_Time(i) <= 0            % If YES:
+                if Dead_Chance(i)               % Case 1: They're dead.
+                    Dead(i)   = 1;              % Set their state to dead.
+                    Infect(i) = 0;              % They're no longer infected.
+                    Move_Speed(i,:) = [0 0];    % The dead are no longer mobile.
+                    
+                else                            % Case 2: They're recovered.
+                    Recover(i) = 1;             % Set their state to recovered.
+                    Infect(i)  = 0;             % They're no longer infected.
+                end
                 
-                % If recovery time is up and carrier is not dead, recover
-                % that carrier
-                Recover(i)=1;
-                Infect(i)=0;
-                Susceptible(i)=0;
-                Dead(i)=0;
+            else                                              % If NO:
+                Recovery_Time(i) = Recovery_Time(i) - 1;      % Decrement their remaining recovery time for the next check.
             end
-            
-        elseif (Infect(i))
-            Recovery_Time(i) = Recovery_Time(i) - 0.5;
         end
-        
-        
-        %% Collision Variables : Decrement collision delay
-        Collision = Collision-ones(Boston_Density, Boston_Density);
-        Collision(Collision<0)=0;
-
-
-        % Update carrier position
-        Position_New = Position + Move_Speed .* (~repmat(Social_Distance,1,2)) * dT;
+               
+        %% Collision Variables :
+        Collision = Collision - ...                 %Resetting collision variable at the start of each iteration.
+              ones(Boston_Density, Boston_Density);
+        Collision(Collision < 0) = 0;
+        Position_New = Position + Move_Speed .* ... %Update the previous position.
+            (~repmat(Social_Distance, 1,2 )) * dT;
         
         for j = 1:1:Boston_Density
 
-            % Checking to see which people collided
-              % Stepping through all other carriers, looking for collisions, and 
-              % if so, transmit disease and recalculate trajectory
-            if j ~= i                       
+            %Checking if any collisions occurred.
+            if j ~= i                           %To avoid self-collision!              
 
                 % Get positions of carriers
                 Position_1 = Position_New(i,:);
@@ -113,13 +87,14 @@ for a = 1:(Simul_Time/dT)
                 % If collision between two living specimens, re-calcuate
                 % direction and transmit virus (but don't check the same
                 % two carriers twice)
-                if norm(Position_1-Position_2)<=(2*Infect_radius) && ~Collision(i,j) && ~Collision(j,i)
+                if norm(Position_1-Position_2) <= (2 * Infect_radius) ...
+                    && ~Collision(i,j) && ~Collision(j,i)
                     
                     % Create the collision delay (i.e. if carrier i and j have recently collided, 
-                    % don't recompute collisions for a n_delay time steps in case they're still close in proximity,
+                    % don't recompute collisions for a Collision_Delay time steps in case they're still close in proximity,
                     % otherwise they might just keep orbiting eachother)
-                    Collision(i,j) = n_delay;
-                    Collision(j,i) = n_delay;
+                    Collision(i,j) = Collision_Delay;
+                    Collision(j,i) = Collision_Delay;
                     
                     % Compute New Move Speed
                     New_Move_Speed = atan2((Position_2(2)-Position_1(2)),(Position_2(1)-Position_1(1)));
@@ -267,10 +242,10 @@ for a = 1:(Simul_Time/dT)
         
         % Plot infection rates vs. time
         subplot(2,3,[3 6]);
-        h2 = plot(Time(1:a),hea_sum(1:a),'g','LineWidth',2);hold on;
-        h3 = plot(Time(1:a),inf_sum(1:a),'r','LineWidth',2);hold on;
-        h4 = plot(Time(1:a),rec_sum(1:a),'b','LineWidth',2);hold on;
-        h5 = plot(Time(1:a),dead_sum(1:a),'k','LineWidth',2);hold off;
+        Susceptible_Line = plot(Time(1:a),hea_sum(1:a),'g','LineWidth',2);hold on;
+        Infect_Line = plot(Time(1:a),inf_sum(1:a),'r','LineWidth',2);hold on;
+        Recover_Line = plot(Time(1:a),rec_sum(1:a),'b','LineWidth',2);hold on;
+        Dead_Line = plot(Time(1:a),dead_sum(1:a),'k','LineWidth',2);hold off;
         legend('Unaffected','Infected','Recovered','Deceased');
         xlabel('Days');
         ylabel('Percent of Population');
@@ -285,27 +260,20 @@ for a = 1:(Simul_Time/dT)
         set(h,'YData',Position_New(:,2));
         set(h,'CData',color);
         
-         % Update title
+        % Update title
         titlestring = strcat('Percent: Unaffected= ',num2str(hea_sum(a)),', Infected= ',...
             num2str(inf_sum(a)),', Recovered=', num2str(rec_sum(a)),...
             ', Deceased=', num2str(dead_sum(a)));
         title(titlestring);
         
         subplot(2,3,[3 6]);
-        set(h2,'XData',Time(1:a)); set(h2,'YData',hea_sum(1:a));
-        set(h3,'XData',Time(1:a)); set(h3,'YData',inf_sum(1:a));
-        set(h4,'XData',Time(1:a)); set(h4,'YData',rec_sum(1:a));
-        set(h5,'XData',Time(1:a)); set(h5,'YData',dead_sum(1:a));
+        set(Susceptible_Line,'XData',Time(1:a)); set(Susceptible_Line,'YData',hea_sum(1:a));
+        set(Infect_Line,'XData',Time(1:a)); set(Infect_Line,'YData',inf_sum(1:a));
+        set(Recover_Line,'XData',Time(1:a)); set(Recover_Line,'YData',rec_sum(1:a));
+        set(Dead_Line,'XData',Time(1:a)); set(Dead_Line,'YData',dead_sum(1:a));
         
     end
     drawnow;
     
     Position = Position_New;      % Update position
-    
-%     Curr_Time = Curr_Time + dT;     %%The simulation progresses forward.
-
-
-
 end
-
-%% Plotting
