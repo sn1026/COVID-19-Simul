@@ -37,4 +37,5 @@ Case 4: Both individuals are infected.  There is no need to update the status of
 # Plotting:
 The MATLAB code initializes the vectors to update the colors of each individual depending on their state.  Furthermore, we compute each state’s population percentage to give a better visualization of our simulation data.
 
-# Results
+# Results [Work in Progress]
+
