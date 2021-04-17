@@ -1,3 +1,4 @@
+  
 %%Clean the interface
 clear;
 clc;
@@ -46,6 +47,14 @@ Move_Speed          = [Speed.*cos(Direction), ...               % How fast each 
                    
 Collision           = zeros(Boston_Density, Boston_Density);    % Create an array to keep track of people bumping into each other.
 Collision_Delay     = ceil(1/dT);                               % Collision delay
+Video_capture       = true;                                     % Save video?
+filename_video      = 'Simulation.avi';                              % Video filename
+
+% Initialize videowriter
+if Video_capture
+    video = VideoWriter(filename_video,'Uncompressed AVI');
+    open(video);
+end
 
 %% Computation
 for a = 1:Time_Interval
@@ -304,5 +313,14 @@ for a = 1:Time_Interval
     end
     drawnow;
     
+    % Saving the video snapshots
+    if Video_capture
+        frame = getframe(gcf);
+        writeVideo(video,frame);
+    end
     Position = Position_New;      % Update position
+end
+
+if Video_capture
+    close(video);
 end
