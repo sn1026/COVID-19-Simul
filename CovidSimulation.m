@@ -55,7 +55,7 @@ Collision_Delay     = ceil(1/dT);                               % Collision dela
 Video_capture       = true;                                     % Save video?
 filename_video      = 'Simulation.avi';                              % Video filename
 
-% Initialize videowriter
+% Initialize Video Writer
 if Video_capture
     video = VideoWriter(filename_video,'Uncompressed AVI');
     open(video);
@@ -86,11 +86,11 @@ for a = 1:Time_Interval
         end
         
         if Susceptible(i)                                       % Checking if the susceptible individual received a vaccine.
-                                                                %Is it their time to get a vaccine?
+                                                                % Is it their time to get a vaccine?
                                                                 
             if Vaccine_Time(i) <= 0                             % If YES:
-                    Vaccine(i) = 1;                             % Set their state to vaccinateded.
-                    Infect(i)  = 0;                             % They're no longer susceptible.
+                    Vaccine(i) = 1;                             % Set their state to vaccinated.
+                    Susceptible(i)  = 0;                        % They're no longer susceptible.
                     
             else                                                % If NO:
                 Vaccine_Time(i) = Vaccine_Time(i) - 1;          % Decrement their remaining vaccination time for the next check.
@@ -188,9 +188,9 @@ for a = 1:Time_Interval
                     %% Transmission Checks
                     if Infect(i) || Infect(j)                               % Check if either person is infected.
 
-                        if Dead(i) || Dead(j) ...
-                           || Recover(i) || Recover(j) ...
-                           || Vaccine(i) || Vaccine(j)                      % Case 1: Collided with dead or recovered person. Do nothing.
+                        if Dead(i) || Dead(j) ...                           % Case 1: Collided with dead, vaccinated, or recovered person.
+                           || Recover(i) || Recover(j) ...                  % Do nothing.
+                           || Vaccine(i) || Vaccine(j)                      
                             if Dead(i) || Recover(i) || Vaccine(i)
                                 Infect(i) = 0;                              % Person i should not be infected.
                             else
@@ -240,8 +240,9 @@ for a = 1:Time_Interval
     end
     
     %% Plotting Variables:
-    color = [Infect Susceptible Recover] .* (1 - Vaccine - Dead);     % Update person's color based on state.
-    
+    color = [Infect Susceptible Recover] + ...
+            [Vaccine*0 Vaccine Vaccine];     % Update person's color based on state.
+
     Infect_Percent(a)       = sum(Infect) * ...             % Update infect percentage.
                             100 / Boston_Density;
     Susceptible_Percent(a)  = sum(Susceptible) * ...        % Update susceptible percentage.
@@ -321,7 +322,7 @@ for a = 1:Time_Interval
         titlestring = strcat('Total: Susceptible= ',num2str(sum(Susceptible))...
                             ,' Infected= ',num2str(sum(Infect))...
                             ,' Recovered= ', num2str(sum(Recover))...
-                            ,' Vaccinated= ', num2str(sum(Recover))...
+                            ,' Vaccinated= ', num2str(sum(Vaccine))...
                             ,' Deceased= ', num2str(sum(Dead)));
         title(titlestring);
         
