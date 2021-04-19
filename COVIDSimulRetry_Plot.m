@@ -1,4 +1,3 @@
-  
 %%Clean the interface
 clear;
 clc;
@@ -23,17 +22,24 @@ Infect_Radius       = 6;                                        % Infection radi
 Mortality_Rate      = 0.026;                                    % Likelihood of death if infected.
 Avg_Recovery_Time   = 15;                                       % Average time (in days) to recover from COVID.
 Recovery_Time       = ceil(Avg_Recovery_Time ...                % The actual time a person will take to recover from COVID.
-                      + 5*randn(Boston_Density,1))/dT;                
-
+                      + 5*randn(Boston_Density,1))/dT;
+                  
+% Vaccine Specific
+Initial_Vaccine     = 0;                                        % Percentage of population vaccinated at the start of simulation
+Avg_Vaccine_Time    = 30;                                       % Average time (in days) to receive a vaccine
+Vaccine_Time       = ceil(Avg_Vaccine_Time ...                  % The actual time a person will take to get vaccinated
+                      + 10*randn(Boston_Density,1))/dT;
 
 %Population Specific
 Infect              = rand(Boston_Density,1) < Initial_Infect;  % Initially random people with COVID.
-Susceptible         = ~Infect;                                  % Everyone else that has not contracted COVID is susceptible.   
+Susceptible         = ~Infect;                                  % Everyone else that has not contracted COVID is susceptible.
+Vaccine             = zeros(Boston_Density,1);                  % Create a vector to keep track of vaccinated
 Recover             = zeros(Boston_Density,1);                  % Create a vector to keep track of recovered
 Dead                = zeros(Boston_Density,1);                  % Create a vector to keep track of deceased.
 Dead_Chance         = rand(Boston_Density,1) < Mortality_Rate;  % Infected random people with COVID have a chance of dying.
 Infect_Percent      = zeros(ceil(Time_Interval),1);             % Create a vector to keep track of infected population percentage.
 Susceptible_Percent = zeros(ceil(Time_Interval),1);             % Create a vector to keep track of susceptible population percentage.
+Vaccine_Percent     = zeros(ceil(Time_Interval),1);             % Create a vector to keep track of infected population percentage.
 Recover_Percent     = zeros(ceil(Time_Interval),1);             % Create a vector to keep track of recovered population percentage.
 Dead_Percent        = zeros(ceil(Time_Interval),1);             % Create a vector to keep track of dead population percentage.
 
@@ -43,18 +49,9 @@ Social_Distance     = rand(Boston_Density,1) < SD_Prop;         % Identifies whi
 Position            = rand(Boston_Density,2) * (Map_Bound);     % Where each 'person' will spawn in on the map.
 Direction           = rand(Boston_Density,1) * 2 * pi;          % Direction each 'person' will be moving.
 Move_Speed          = [Speed.*cos(Direction), ...               % How fast each 'person' is moving, given a direction.
-                       Speed.*sin(Direction)];              
-                   
+                       Speed.*sin(Direction)];                                 
 Collision           = zeros(Boston_Density, Boston_Density);    % Create an array to keep track of people bumping into each other.
 Collision_Delay     = ceil(1/dT);                               % Collision delay
-Video_capture       = true;                                     % Save video?
-filename_video      = 'Simulation.avi';                              % Video filename
-
-% Initialize videowriter
-if Video_capture
-    video = VideoWriter(filename_video,'Uncompressed AVI');
-    open(video);
-end
 
 %% Computation
 for a = 1:Time_Interval
@@ -77,6 +74,18 @@ for a = 1:Time_Interval
                 
             else                                                % If NO:
                 Recovery_Time(i) = Recovery_Time(i) - 1;        % Decrement their remaining recovery time for the next check.
+            end
+        end
+        
+        if Susceptible(i)                                       % Checking if the susceptible individual received a vaccine.
+                                                                %Is it their time to get a vaccine?
+                                                                
+            if Vaccine_Time(i) <= 0                             % If YES:
+                    Vaccine(i) = 1;                             % Set their state to vaccinateded.
+                    Infect(i)  = 0;                             % They're no longer susceptible.
+                    
+            else                                                % If NO:
+                Vaccine_Time(i) = Vaccine_Time(i) - 1;          % Decrement their remaining vaccination time for the next check.
             end
         end
                
@@ -171,8 +180,10 @@ for a = 1:Time_Interval
                     %% Transmission Checks
                     if Infect(i) || Infect(j)                               % Check if either person is infected.
 
-                        if Dead(i) || Dead(j) || Recover(i) || Recover(j)   % Case 1: Collided with dead or recovered person. Do nothing.
-                            if Dead(i) || Recover(i)
+                        if Dead(i) || Dead(j) ...
+                           || Recover(i) || Recover(j) ...
+                           || Vaccine(i) || Vaccine(j)                      % Case 1: Collided with dead or recovered person. Do nothing.
+                            if Dead(i) || Recover(i) || Vaccine(i)
                                 Infect(i) = 0;                              % Person i should not be infected.
                             else
                                 Infect(j) = 0;                              % Person j should not be infected.
@@ -221,13 +232,15 @@ for a = 1:Time_Interval
     end
     
     %% Plotting Variables:
-    color = [Infect Susceptible Recover] .* (1 - Dead);     % Update person's color based on state.
+    color = [Infect Susceptible Recover] .* (1 - Vaccine - Dead);     % Update person's color based on state.
     
     Infect_Percent(a)       = sum(Infect) * ...             % Update infect percentage.
                             100 / Boston_Density;
     Susceptible_Percent(a)  = sum(Susceptible) * ...        % Update susceptible percentage.
                             100 / Boston_Density;
     Recover_Percent(a)      = sum(Recover) * ...            % Update recover percentage.
+                            100 / Boston_Density;
+    Vaccine_Percent(a)      = sum(Vaccine) * ...            % Update vaccine percentage.
                             100 / Boston_Density;
     Dead_Percent(a)         = sum(Dead) * ...               % Update dead percentage.
                             100 / Boston_Density;
@@ -254,6 +267,7 @@ for a = 1:Time_Interval
         titlestring = strcat('Total: Susceptible= ',num2str(sum(Susceptible))...
                             ,' Infected= ',num2str(sum(Infect))...
                             ,' Recovered=', num2str(sum(Recover))...
+                            ,' Vaccinated=', num2str(sum(Vaccine))...
                             ,' Deceased=', num2str(sum(Dead)));
         title(titlestring);
         
@@ -276,10 +290,12 @@ for a = 1:Time_Interval
                               ,'r','LineWidth',2);
         Recover_Line        = plot(Time(1:a),Recover_Percent(1:a)...
                               ,'b','LineWidth',2);
+        Vaccine_Line        = plot(Time(1:a),Vaccine_Percent(1:a)...
+                              ,'c','LineWidth',2);
         Dead_Line           = plot(Time(1:a),Dead_Percent(1:a)...
                               ,'k','LineWidth',2);
         hold off;
-        legend('Susceptible','Infected','Recovered','Deceased');
+        legend('Susceptible','Infected','Recovered','Vaccinated','Deceased');
         xlabel('Days');
         ylabel('Population %');
         xlim([0,Simul_Time]);
@@ -296,8 +312,9 @@ for a = 1:Time_Interval
         % Update title
         titlestring = strcat('Total: Susceptible= ',num2str(sum(Susceptible))...
                             ,' Infected= ',num2str(sum(Infect))...
-                            ,' Recovered=', num2str(sum(Recover))...
-                            ,' Deceased=', num2str(sum(Dead)));
+                            ,' Recovered= ', num2str(sum(Recover))...
+                            ,' Vaccinated= ', num2str(sum(Recover))...
+                            ,' Deceased= ', num2str(sum(Dead)));
         title(titlestring);
         
         subplot(2,3,[3 6]);
@@ -307,20 +324,13 @@ for a = 1:Time_Interval
             set(Infect_Line,'YData',Infect_Percent(1:a));
         set(Recover_Line,'XData',Time(1:a)); ...
             set(Recover_Line,'YData',Recover_Percent(1:a));
+        set(Vaccine_Line,'XData',Time(1:a)); ...
+            set(Vaccine_Line,'YData',Vaccine_Percent(1:a));
         set(Dead_Line,'XData',Time(1:a)); ...
             set(Dead_Line,'YData',Dead_Percent(1:a));
         
     end
     drawnow;
     
-    % Saving the video snapshots
-    if Video_capture
-        frame = getframe(gcf);
-        writeVideo(video,frame);
-    end
     Position = Position_New;      % Update position
-end
-
-if Video_capture
-    close(video);
 end
